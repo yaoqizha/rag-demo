@@ -1,14 +1,33 @@
 <template>
-  <div>
-    <div class=""></div>
-    <label>
-      輸入內容：
-      <input v-model="inputValue" />
-    </label>
+  <div class="container">
+    <h1>滑鼠產品問答系統</h1>
+    <div class="input-section">
+      <label for="user-question">請輸入您的問題：</label>
+      <input
+        id="user-question"
+        v-model="inputValue"
+        placeholder="例如：哪種滑鼠適合手掌較大的人？"
+      />
+      <button @click="findBestMatch">提交問題</button>
+    </div>
 
-    <div>
-      {{ response }}
-      <button @click="findBestMatch">click</button>
+    <div v-if="response" class="response-section">
+      <h2>回答：</h2>
+      <p>{{ response }}</p>
+    </div>
+
+    <div v-if="bestMatch" class="reference-section">
+      <h2>參考資料：</h2>
+      <div class="reference-card">
+        <h3>{{ bestMatch.name }}</h3>
+        <p><strong>描述：</strong> {{ bestMatch.description }}</p>
+        <p><strong>特點：</strong></p>
+        <ul>
+          <li v-for="feature in bestMatch.features" :key="feature">{{ feature }}</li>
+        </ul>
+        <p><strong>尺寸：</strong> {{ bestMatch.size.join(', ') }}</p>
+        <p><strong>價格：</strong> ${{ bestMatch.price }}</p>
+      </div>
     </div>
   </div>
 </template>
@@ -17,8 +36,9 @@
 import { ref } from 'vue'
 import { ChatOpenAI } from '@langchain/openai'
 import { OpenAIEmbeddings } from '@langchain/openai'
+
 const highestScore = ref(-1)
-const bestMatch = ref('')
+const bestMatch = ref(null)
 const response = ref('')
 const inputValue = ref('')
 const apiKey = window.location.search.replace('?apiKey=', '')
@@ -29,7 +49,6 @@ const chatModel = new ChatOpenAI({
   apiKey
 })
 
-//const question = 'How is the weather in Taipei regularly?'
 const reference = [
   {
     description: '較低鼠背設計，手掌較少支撐',
@@ -52,7 +71,6 @@ const reference = [
       '高點處靠近滑鼠中後段，提供掌心較多支撐',
       '前方兩端設計，提供抬鼠時指頭的支撐點'
     ],
-    gripstyleMobileImage: [],
     size: ['L', 'M', 'S'],
     dmImage: 'https://image.benq.com/is/image/benqco/01-za11-b-top',
     price: '100',
@@ -104,6 +122,7 @@ const cosinesim = (A, B) => {
 
   return similarity
 }
+
 async function calculateEmbeddings() {
   const questionEmbedding = await embeddings.embedQuery(inputValue.value)
   const referenceEmbeddings = await Promise.all(
@@ -114,7 +133,7 @@ async function calculateEmbeddings() {
 
 async function findBestMatch() {
   highestScore.value = -1
-  bestMatch.value = ''
+  bestMatch.value = null
   const { questionEmbedding, referenceEmbeddings } = await calculateEmbeddings()
 
   for (let i = 0; i < reference.length; i++) {
@@ -129,13 +148,14 @@ async function findBestMatch() {
   console.log('相似度分數:', highestScore.value)
   generateResponse()
 }
+
 async function generateResponse() {
   try {
     const prompt =
       highestScore.value > 0.78
         ? `{"retrieved_document":${JSON.stringify(bestMatch.value)},"question":"${inputValue.value}"}. ` +
-          `假設你是滑鼠的銷售人員，Generate an answer based on retrieved_document,` +
-          `and provide the answer without any additional content.`
+          `假設你是滑鼠的銷售人員，根據retrieved_document生成回答，` +
+          `並提供回答，不要添加任何額外內容。`
         : inputValue.value
     const result = await chatModel.invoke(prompt)
     response.value = result.content
@@ -145,3 +165,49 @@ async function generateResponse() {
   }
 }
 </script>
+
+<style scoped>
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.input-section {
+  margin-bottom: 20px;
+}
+
+.input-section label {
+  display: block;
+  margin-bottom: 5px;
+}
+
+.input-section input {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+
+.input-section button {
+  padding: 10px 20px;
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+.response-section,
+.reference-section {
+  margin-top: 20px;
+}
+
+.reference-card {
+  border: 1px solid #ddd;
+  padding: 15px;
+  border-radius: 5px;
+}
+
+.reference-card ul {
+  padding-left: 20px;
+}
+</style>
